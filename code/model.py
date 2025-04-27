@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torchvision.models.detection.mask_rcnn import maskrcnn_resnet50_fpn,MaskRCNN_ResNet50_FPN_Weights, MaskRCNNPredictor
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FastRCNNConvFCHead
+from collections import OrderedDict
 import os
 class CustomedModel(nn.Module):
     def __init__(self, anchor_generator, roi_pooler, num_classes:int, pretrained = True):
@@ -35,9 +36,14 @@ class CustomedModel(nn.Module):
         else:
             return self.model(images)
         
-    def load_pretrained_weight(self, pretrained_weight_path:str, device):
+    def load_pretrained_weight(self, pretrained_weight_path:str, weight_only = True,device="cuda"):
         if(os.path.exists(pretrained_weight_path)):
-            self.model.load_state_dict(torch.load(pretrained_weight_path, map_location=device))
+            stat_dict = torch.load(pretrained_weight_path, weights_only=weight_only,map_location=device)
+            new_state_dict = OrderedDict()
+            for k,v in stat_dict.items():
+                name = k.replace("model.", "")
+                new_state_dict[name] = v
+            self.model.load_state_dict(new_state_dict)
         else:
             print("pretrainde weight not exist.")
     

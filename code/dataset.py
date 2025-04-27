@@ -9,12 +9,17 @@ import cv2
 from scipy import ndimage
 import torch
 import re
+from utils import encode_mask, decode_maskobj
+import json
 
 class CustomedDataset(Dataset):
-    def __init__(self, path, transform = None):
+    def __init__(self, filePath, transform = None):
         super().__init__()
-        self.path = path
-        self.data_subdirs = os.listdir(path)
+        json_data = json.load(open(f"{filePath}\\sample.json","r"))
+        self.images = json_data["images"]
+        self.annotations = json_data["annotations"]
+        self.categories = json_data["categories"]
+        self.folder = filePath
 
         if (transform == None):
             self.transform = transforms.Compose([
@@ -26,71 +31,66 @@ class CustomedDataset(Dataset):
             self.transform = transform
     
     def __getitem__(self, idx):
-        subdir = os.path.join(self.path,self.data_subdirs[idx])
+        filename = self.images[idx]["filename"] 
         
-        mask_pairs= []
-        for file in os.listdir(subdir):
-            if(file == "image.tif"):
-                image_path = os.path.join(subdir,file)
-            else:
-                mask_label = re.findall(r'\d+', file) [0]
-                mask_pairs.append((int(mask_label), os.path.join(subdir,file)))
-                
-        image = Image.open(image_path).convert("RGB")
-      
-        image = self.transform(image)
+        img = Image.open(os.path.join(self.folder, filename,"image.tif")).convert("RGB")
 
-        binary_masks = []
+        file_id = self.images[idx]["id"]
+
+        image_annotations = [anno for anno in self.annotations if anno["image_id"] == file_id]
+        
         boxes = []
         labels = []
-        for mask_label,mask_path in mask_pairs:
-            binary_mask, mask_boxes, mask_labels = self.getMaskInstace(mask_label,mask_path)
-            binary_masks += binary_mask
-            boxes += mask_boxes
-            labels += mask_labels 
+        binary_masks = []
+
+        for anno in image_annotations:
+            x, y, bw, bh = anno["bbox"]
+            x_min = x
+            y_min = y
+            x_max = x + bw
+            y_max = y + bh
+
+            boxes.append([x_min, y_min, x_max, y_max])
+            labels.append(int(anno["category_id"]))
+            binary_masks.append(decode_maskobj(anno["segmentation"]).astype(np.uint8))
+
+        image = self.transform(img)
 
         binary_masks_np = np.array(binary_masks)
-        
         target = {
-            "image_id" : torch.tensor([idx]),
+            "image_id" : torch.tensor([file_id]),
             "boxes" : torch.tensor(boxes, dtype=torch.float32),
             "labels": torch.tensor(labels, dtype=torch.int64),
-            "masks" : torch.from_numpy(binary_masks_np).to(torch.uint8)
+            "masks" : torch.from_numpy(binary_masks_np)
         }
-
         return image, target
 
     def __len__(self):
-        return len(self.data_subdirs)
+        return len(self.images)
     
-    def getMaskInstace(self, mask_label, mask_path):
-        mask = sio.imread(mask_path)
-        binary_mask = (mask > 0)
+class TestDataset(Dataset):
+    def __init__(self, test_path):
+        super().__init__()
+        self.root = test_path
+        self.image_paths = os.listdir(test_path)
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485,0.456, 0.406],
+                                std=[0.229, 0.225, 0.225])
+        ])
 
-        labeled, num_objs = ndimage.label(binary_mask)
+    def __getitem__(self, index):
+        file_name = self.image_paths[index].split(sep=".")[0]
+        filepath = os.path.join(self.root, self.image_paths[index])
+        img =  Image.open(filepath).convert("RGB")
+        img_transformed = self.transform(img)
 
-        masks = []
-        labels = []
-        boxes = []
+        return index + 1, file_name, img_transformed  
 
-        for i in range(1,num_objs+1): #labeled == 0 will output all mask instance
-            mask_instace = (labeled == i)
+    def __len__(self):
+        return len(self.image_paths)
 
-            #bbox
-            ys, xs = np.where(mask_instace)
-            xmin, xmax = xs.min(), xs.max()
-            ymin, ymax = ys.min(), ys.max()
-            
-            # Debug
-            if xmax <= xmin or ymax <= ymin:
-                continue
-            
-            masks.append(np.array(mask_instace, dtype=np.uint8))
-            boxes.append([xmin,ymin,xmax,ymax])
-            labels.append(mask_label)
-
-        return masks, boxes, labels
-
+ 
 
        
 
