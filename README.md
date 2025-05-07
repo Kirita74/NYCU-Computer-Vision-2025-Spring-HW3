@@ -2,7 +2,7 @@
 - StudentID: 313553037
 - Name: 黃瑜明
 ## Introduction
-Utilize Mask R-CNN, with ResNet-50 as the backbone to detect individual cell within an image. The model is trained to localize each cell by predicting its bounding box and to classify its corresponding cell class (1–4). 
+Utilize Mask R-CNN, with ResNext-50 as the backbone to detect individual cell within an image. The model is trained to localize each cell by predicting its bounding box and to classify its corresponding cell class (1–4). 
 ## How to install
 1. Clone the repository
     ```
@@ -78,9 +78,9 @@ Utilize Mask R-CNN, with ResNet-50 as the backbone to detect individual cell wit
 
 ### Training Curve
 - Epoch loss
-    ![Image](image/Epoch_loss.png)
+    ![Image](image/train_loss.png)
 - Mean Average Precision
-    ![Image](image/Average_Precision.png)
+    ![Image](image/mAP.png)
 
 ### Perfomance
 ||Accuracy(%)|
