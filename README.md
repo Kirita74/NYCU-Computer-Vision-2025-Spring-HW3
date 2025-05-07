@@ -82,14 +82,8 @@ Utilize Mask R-CNN, with ResNet-50 as the backbone to detect individual cell wit
 - Mean Average Precision
     ![Image](image/Average_Precision.png)
 
-### Example of digit detection and recognition
-- Example 1
-    ![Image](image/example1.jpg)
-- Example 2
-    ![Image](image/example2.jpg)
-  
 ### Perfomance
 ||Accuracy(%)|
 |----------|--|
-|Public mAP|35|
-|Public test|79|
+|Public mAP|32|
+|Public test|29|
