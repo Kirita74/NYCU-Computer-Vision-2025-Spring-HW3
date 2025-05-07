@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import cv2
 import skimage.io as sio
-from utils import encode_mask,decode_maskobj,read_maskfile
+from code.utils import encode_mask,decode_maskobj,read_maskfile
 from scipy import ndimage
 import numpy as np
 import torch

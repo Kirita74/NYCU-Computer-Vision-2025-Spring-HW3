@@ -1,40 +1,38 @@
-from torch.utils.data import Dataset
-from torchvision import transforms 
-from PIL import Image
 import os
-from pycocotools import mask as mask
-import skimage.io as sio
+import json
 import numpy as np
 import cv2
-from scipy import ndimage
 import torch
-import re
-from utils import  decode_maskobj
-import json
+from pycocotools import mask as mask
+from utils import decode_maskobj
 import albumentations as albu
+from torch.utils.data import Dataset
+from torchvision import transforms
+from PIL import Image
+
 
 class CustomedDataset(Dataset):
-    def __init__(self, filePath, transform):
+    def __init__(self, file_path, transform):
         super().__init__()
-        json_data = json.load(open(f"{filePath}\\sample.json","r"))
+        json_data = json.load(open(f"{file_path}\\sample.json", "r"))
         self.images = json_data["images"]
         self.annotations = json_data["annotations"]
         self.categories = json_data["categories"]
-        self.folder = filePath
-        self.tranform = transform
-    
+        self.folder = file_path
+        self.transform = transform
+
     def __getitem__(self, idx):
-        filename = self.images[idx]["filename"] 
-        
-        # img = Image.open(os.path.join(self.folder, filename,"image.tif")).convert("RGB")
-        img = cv2.imread(os.path.join(self.folder, filename,"image.tif"))
+        filename = self.images[idx]["filename"]
+
+        img = cv2.imread(os.path.join(self.folder, filename, "image.tif"))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # img_size = img.size
 
         file_id = self.images[idx]["id"]
 
-        image_annotations = [anno for anno in self.annotations if anno["image_id"] == file_id]
-        
+        image_annotations = [
+            anno for anno in self.annotations if anno["image_id"] == file_id
+        ]
+
         boxes = []
         labels = []
         binary_masks = []
@@ -48,11 +46,13 @@ class CustomedDataset(Dataset):
 
             boxes.append([x_min, y_min, x_max, y_max])
             labels.append(int(anno["category_id"]))
-            binary_masks.append(decode_maskobj(anno["segmentation"]).astype(np.uint8))
+            binary_masks.append(
+                decode_maskobj(anno["segmentation"]).astype(np.uint8)
+            )
 
-       
-
-        augmented = self.tranform(image = img, bbox=boxes, masks=binary_masks, labels=labels)
+        augmented = self.transform(
+            image=img, bbox=boxes, masks=binary_masks, labels=labels
+        )
         image = augmented["image"]
         boxes = augmented["bbox"]
         labels = augmented["labels"]
@@ -60,65 +60,66 @@ class CustomedDataset(Dataset):
         binary_masks_np = np.array(binary_masks)
 
         target = {
-            "image_id" : torch.tensor([file_id]),
-            "boxes" : torch.tensor(boxes, dtype=torch.float32),
+            "image_id": torch.tensor([file_id]),
+            "boxes": torch.tensor(boxes, dtype=torch.float32),
             "labels": torch.tensor(labels, dtype=torch.int64),
-            "masks" : torch.from_numpy(binary_masks_np)
+            "masks": torch.from_numpy(binary_masks_np),
         }
         return image, target
 
     def __len__(self):
         return len(self.images)
-    
+
+
 class TestDataset(Dataset):
-    def __init__(self, ):
+    def __init__(self, test_path):
         super().__init__()
-        self.root = "data\\test_release"
-        with open("data\\test_image_name_to_ids.json") as rdr:
+        self.root = test_path
+        with open("..\\data\\test_image_name_to_ids.json") as rdr:
             self.json_loader = json.load(rdr)
         self.transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485,0.456, 0.406],
-                                std=[0.229, 0.225, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.225, 0.225])
         ])
 
     def __getitem__(self, index):
         json_data = self.json_loader[index]
         filename = json_data["file_name"]
         file_id = json_data["id"]
-        h =json_data['height']
+        h = json_data['height']
         w = json_data['width']
 
         filepath = os.path.join(self.root, filename)
-        img =  Image.open(filepath).convert("RGB")
+        img = Image.open(filepath).convert("RGB")
         img_transformed = self.transform(img)
-        file_size = (w,h)
-        return file_id, file_size, img_transformed  
+        file_size = (w, h)
+        return file_id, file_size, img_transformed
 
     def __len__(self):
         return len(self.json_loader)
 
 
-def getDatasets(train_path, seed = 42):
-    bbox_params =albu.BboxParams(format="pascla_voc", label_fields=['labels'])
+def get_datasets(train_path, seed=42):
+    bbox_params = albu.BboxParams(format="pascla_voc", label_fields=['labels'])
     train_transform = albu.Compose([
         albu.HorizontalFlip(p=0.3),
         albu.VerticalFlip(p=0.3),
         albu.GaussNoise(p=0.2),
-        albu.Normalize(mean=[0.485,0.456, 0.406],
-                        std=[0.229, 0.225, 0.225]),
+        albu.Normalize(mean=[0.485, 0.456, 0.406],
+                       std=[0.229, 0.225, 0.225]),
         albu.ToTensorV2()
     ], bbox_params=bbox_params)
-    
+
     valid_transform = albu.Compose([
-        albu.Normalize(mean=[0.485,0.456, 0.406],
-                std=[0.229, 0.225, 0.225]),
+        albu.Normalize(mean=[0.485, 0.456, 0.406],
+                       std=[0.229, 0.225, 0.225]),
         albu.ToTensorV2()
     ], bbox_params=bbox_params)
 
     full_train_ds = CustomedDataset(train_path, transform=train_transform)
     full_valid_ds = CustomedDataset(train_path, transform=valid_transform)
-    
+
     import random
     from torch.utils.data import Subset
 
@@ -133,5 +134,3 @@ def getDatasets(train_path, seed = 42):
     valid_ds = Subset(full_valid_ds, valid_idx)
 
     return train_ds, valid_ds
-
-    
