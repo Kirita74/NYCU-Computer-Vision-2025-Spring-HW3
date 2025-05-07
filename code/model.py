@@ -1,33 +1,49 @@
 import torch
 import torch.nn as nn
 from torchvision.models.detection.mask_rcnn import maskrcnn_resnet50_fpn,MaskRCNN_ResNet50_FPN_Weights, MaskRCNNPredictor
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FastRCNNConvFCHead
+from torchvision.models.detection.mask_rcnn import maskrcnn_resnet50_fpn_v2,MaskRCNN_ResNet50_FPN_V2_Weights
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from collections import OrderedDict
 import os
+from torchvision.models.detection.rpn import RPNHead
+
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+from torchvision.models import resnet50, ResNet50_Weights, ResNeXt50_32X4D_Weights
+from torchvision.models.detection.mask_rcnn import MaskRCNN
+
 class CustomedModel(nn.Module):
-    def __init__(self, anchor_generator, roi_pooler, num_classes:int, pretrained = True):
+    def __init__(self, anchor_generator,roi_pooler, mask_roi_pooler, num_classes:int, pretrained = True):
         super(CustomedModel, self).__init__()
         # trainable_backbone_layers
-        model = maskrcnn_resnet50_fpn(
-            weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT if pretrained else None,
-            rpn_anchor_generator = anchor_generator,
-            box_roi_pool = roi_pooler
-            )
-        
-        in_features = model.roi_heads.box_predictor.cls_score.in_features
     
+        
+        backbone_with_fpn = resnet_fpn_backbone(
+            backbone_name="resnext50_32x4d",
+            weights=ResNeXt50_32X4D_Weights.IMAGENET1K_V2 if pretrained else None,
+            trainable_layers=4,
+        )
+ 
+        rpn_head = RPNHead(in_channels=256 ,num_anchors= anchor_generator.num_anchors_per_location()[0], conv_depth=5)
+
+        model = MaskRCNN(
+            backbone_with_fpn,
+            num_classes=num_classes,
+            rpn_anchor_generator=anchor_generator,
+            rpn_head=rpn_head,
+            box_roi_pool=roi_pooler,
+            mask_roi_pool=mask_roi_pooler
+        )
+
+
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
         model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-        model.roi_heads.nms_thresh = 0.2
-        model.roi_heads.score_thresh = 0.5
         model.roi_heads.positive_fraction = 0.25
-        
         #Mask Head跟RPN head可以改
+
         in_features = model.roi_heads.mask_predictor.conv5_mask.in_channels
-        hidden_layer = 256
-        model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features, hidden_layer, num_classes)
-        
-        # model.rpn_anchor_generator = anchor_generator
-        # model.box_roi_pool = roi_pooler
+        hidden_layer = 512
+        model.roi_heads.mask_predictor = CustomedMaskRCNNPredictor(in_features, hidden_layer, num_classes= num_classes)
+
         self.model = model
 
     def forward(self, images, targets = None):
@@ -49,3 +65,45 @@ class CustomedModel(nn.Module):
     
     def save_model(self, save_model_path:str):
         torch.save(self.model.state_dict(),save_model_path)
+
+class CustomedMaskRCNNPredictor(nn.Sequential):
+    def __init__(self, in_channels, dim_reduced, num_classes):
+        super().__init__(
+            OrderedDict(
+                [
+                    ("conv5_mask", nn.ConvTranspose2d(in_channels, dim_reduced, 2, 2, 0)),
+                    ("relu1", nn.ReLU(inplace=True)),
+                    ("conv6_mask", nn.Conv2d(dim_reduced, dim_reduced, 3, padding=1)),
+                    ("relu2", nn.ReLU(inplace=True)),
+                    ("conv7_mask", nn.Conv2d(dim_reduced, dim_reduced, 3, padding=1)),
+                    ("relu3", nn.ReLU(inplace=True)),   
+                    ("mask_fcn_logits", nn.Conv2d(dim_reduced, num_classes, 1, 1, 0)),
+                ]
+            )
+        )
+
+        for name, param in self.named_parameters():
+            if "weight" in name:
+                nn.init.kaiming_normal_(param, mode="fan_out", nonlinearity="relu")
+
+class CustomedMaskRCNNPredictorv2(nn.Sequential):
+    def __init__(self, in_channels, dim_reduced, num_classes):
+        layers = []
+        layers.append(("deconv", nn.ConvTranspose2d(in_channels, dim_reduced, 2, 2, 0)))
+        layers.append(("gn0", nn.GroupNorm(32, dim_reduced)))
+        layers.append(("relu0", nn.ReLU(inplace=True)))
+
+        for i in range(3):
+            layers.append((f"conv{i}", nn.Conv2d(dim_reduced, dim_reduced, 3, padding=1)))
+            layers.append((f"gn{i+1}", nn.GroupNorm(32, dim_reduced)))
+            layers.append((f"relu{i+1}", nn.ReLU(inplace=True)))
+            layers.append((f"drop{i}",   nn.Dropout2d(0.1)))
+        
+        layers.append(("mask_fcn_logits", nn.Conv2d(dim_reduced, num_classes, 1)))
+        super().__init__(OrderedDict(layers))
+
+        for n, p in self.named_parameters():
+            if "weight" in n and p.dim() > 1:
+                nn.init.kaiming_normal_(p, mode="fan_out", nonlinearity="relu")
+
+
