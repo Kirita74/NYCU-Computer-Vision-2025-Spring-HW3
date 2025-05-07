@@ -24,7 +24,7 @@ class CustomedModel(nn.Module):
         backbone_with_fpn = resnet_fpn_backbone(
             backbone_name="resnext50_32x4d",
             weights=ResNeXt50_32X4D_Weights.IMAGENET1K_V2 if pretrained else None,
-            trainable_layers=4,
+            trainable_layers=5,
         )
 
         rpn_head = RPNHead(
