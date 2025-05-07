@@ -85,5 +85,5 @@ Utilize Mask R-CNN, with ResNext-50 as the backbone to detect individual cell wi
 ### Perfomance
 ||Accuracy(%)|
 |----------|--|
-|Public mAP|32|
-|Public test|29|
+|Public mAP|33|
+|Public test|32|
