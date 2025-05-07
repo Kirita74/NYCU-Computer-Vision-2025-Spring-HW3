@@ -69,8 +69,8 @@ Utilize Mask R-CNN, with ResNet-50 as the backbone to detect individual cell wit
 | **Mask ROI pooling output size**     | 14 × 14                                                                      |
 | **Mask ROI pooling sampling ratio**  | 4                                                                          |
 | **Optimizer**                 | `AdamW`                                                                    |
-| **Learning Rate**             | 5e-5                                                                       |
-| **Weight Decay**              | 1e-4                                                                       |
+| **Learning Rate**             | 1e-4                                                                       |
+| **Weight Decay**              | 5e-5                                                                       |
 | **Scheduler**                 | `CosineAnnealingLR`                                                        |
 | **T_max**                     | 100                                                                         |
 | **Epochs**                    | 100                                                                         |
