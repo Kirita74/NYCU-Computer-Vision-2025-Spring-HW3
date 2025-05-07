@@ -72,8 +72,8 @@ Utilize Mask R-CNN, with ResNext-50 as the backbone to detect individual cell wi
 | **Learning Rate**             | 1e-4                                                                       |
 | **Weight Decay**              | 5e-5                                                                       |
 | **Scheduler**                 | `CosineAnnealingLR`                                                        |
-| **T_max**                     | 100                                                                         |
-| **Epochs**                    | 100                                                                         |
+| **T_max**                     | 30                                                                        |
+| **Epochs**                    | 30                                                                         |
 | **Batch Size**                | 1                                                                          |
 
 ### Training Curve
